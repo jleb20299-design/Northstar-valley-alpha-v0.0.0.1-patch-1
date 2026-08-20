@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Northstar Valley</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #edf4ef;
+      --muted: #b6c8bd;
+      --panel: rgba(10, 28, 30, 0.78);
+      --line: rgba(216, 239, 225, 0.2);
+      --accent: #f3bd62;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #91b6ad; font-family: Georgia, 'Times New Roman', serif; }
+    #fallback { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; background: #91b6ad; }
+    #scene { position: fixed; inset: 0; z-index: 1; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .hud { position: fixed; inset: 0; z-index: 2; pointer-events: none; color: var(--ink); }
+    .brand { position: absolute; top: 28px; left: 32px; letter-spacing: .08em; text-transform: uppercase; }
+    .brand small { display: block; color: var(--accent); font: 600 11px/1.4 'Trebuchet MS', sans-serif; letter-spacing: .28em; }
+    .brand h1 { margin: 5px 0 0; font-size: clamp(25px, 3vw, 42px); font-weight: 400; }
+    .info { position: absolute; top: 28px; right: 32px; max-width: 215px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); backdrop-filter: blur(12px); font: 12px/1.45 'Trebuchet MS', sans-serif; color: var(--muted); }
+    .info strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 11px; letter-spacing: .13em; text-transform: uppercase; }
+    .objective { position: absolute; top: 126px; right: 32px; width: 215px; padding: 12px 16px; border-left: 2px solid var(--accent); background: var(--panel); backdrop-filter: blur(12px); font: 12px/1.5 'Trebuchet MS', sans-serif; color: var(--muted); }
+    .objective strong { display: block; margin-bottom: 4px; color: var(--accent); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+    .objective b { color: var(--ink); font-weight: 600; }
+    #message { position: absolute; left: 50%; bottom: 124px; transform: translateX(-50%); min-width: 260px; padding: 11px 18px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); text-align: center; font: 12px 'Trebuchet MS', sans-serif; opacity: 0; transition: opacity .25s; }
+    #message.visible { opacity: 1; }
+    .bottom { position: absolute; bottom: 28px; left: 32px; display: flex; align-items: center; gap: 17px; }
+    .compass { width: 62px; height: 62px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); font: 11px 'Trebuchet MS', sans-serif; }
+    .compass::before { content: ''; position: absolute; width: 1px; height: 50px; background: var(--line); }
+    .compass b { transform: translateY(-20px); font-weight: 400; color: var(--accent); }
+    #crosshair { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); opacity: .78; }
+    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255, 246, 211, .9); box-shadow: 0 0 4px rgba(0, 0, 0, .7); }
+    #crosshair::before { top: 8px; left: 0; width: 18px; height: 2px; }
+    #crosshair::after { top: 0; left: 8px; width: 2px; height: 18px; }
+    #inventory { position: absolute; left: 32px; top: 118px; width: 238px; padding: 15px; border: 1px solid rgba(216, 239, 225, .3); background: rgba(7, 24, 26, .86); backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0,0,0,.22); font: 12px/1.4 'Trebuchet MS', sans-serif; opacity: 0; transform: translateY(-8px); transition: opacity .2s, transform .2s; }
+    #inventory.visible { opacity: 1; transform: translateY(0); }
+    #inventory strong { display: block; margin-bottom: 9px; color: var(--accent); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+    .inventory-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .inventory-item { position: relative; min-height: 68px; display: grid; place-items: center; border: 1px solid rgba(216, 239, 225, .22); background: rgba(255,255,255,.04); color: var(--ink); }
+    .inventory-item.selected { border-color: var(--accent); background: rgba(243,189,98,.13); box-shadow: inset 0 0 0 1px rgba(243,189,98,.18); }
+    .inventory-item b { position: absolute; right: 5px; top: 4px; color: var(--accent); font: 10px 'Trebuchet MS', sans-serif; }
+    .inventory-item small { position: absolute; bottom: 4px; color: var(--muted); font: 9px 'Trebuchet MS', sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+    .slot-empty { opacity: .25; }
+    .axe-icon { position: relative; width: 34px; height: 40px; transform: rotate(-29deg); }
+    .axe-icon::before { content: ''; position: absolute; left: 16px; top: 3px; width: 5px; height: 38px; border-radius: 3px; background: #855633; }
+    .axe-icon::after { content: ''; position: absolute; left: 7px; top: 1px; width: 20px; height: 13px; border: 3px solid #b8c2be; border-radius: 3px 9px 2px 3px; background: #71807c; }
+    .hint { color: var(--muted); font: 12px/1.5 'Trebuchet MS', sans-serif; }
+    .hint kbd { display: inline-block; min-width: 22px; padding: 3px 5px; margin-right: 2px; border: 1px solid var(--line); border-radius: 3px; color: var(--ink); text-align: center; }
+    #start { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(135deg, rgba(9, 31, 33, .82), rgba(20, 52, 45, .36)); pointer-events: auto; cursor: pointer; }
+    .start-card { width: min(430px, calc(100vw - 40px)); padding: 31px 34px 34px; border: 1px solid rgba(235, 245, 235, .28); border-radius: 8px; background: rgba(7, 24, 26, .84); box-shadow: 0 25px 90px rgba(0,0,0,.3); text-align: center; }
+    .start-card .eyebrow { color: var(--accent); font: 600 10px/1 'Trebuchet MS', sans-serif; letter-spacing: .3em; text-transform: uppercase; }
+    .start-card h2 { margin: 12px 0 9px; font-size: 36px; font-weight: 400; }
+    .start-card p { margin: 0 auto 25px; color: var(--muted); font: 13px/1.6 'Trebuchet MS', sans-serif; }
+    .start-card button { padding: 12px 19px; border: 0; border-radius: 4px; background: var(--accent); color: #162b25; font: 700 11px 'Trebuchet MS', sans-serif; letter-spacing: .17em; text-transform: uppercase; cursor: pointer; }
+    .start-card button:hover { background: #ffd48b; }
+    .start-actions { display: flex; justify-content: center; gap: 9px; flex-wrap: wrap; }
+    .start-card button.secondary { background: transparent; border: 1px solid rgba(235,245,235,.35); color: var(--ink); }
+    .start-card button.secondary:hover { background: rgba(255,255,255,.1); }
+    #saveStatus { margin-top: 14px; color: var(--muted); font: 10px 'Trebuchet MS', sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+    #doorPrompt { position: absolute; left: 50%; bottom: 88px; transform: translateX(-50%); display: none; align-items: center; gap: 12px; padding: 10px 12px 10px 15px; border: 1px solid rgba(235,245,235,.3); background: var(--panel); box-shadow: 0 12px 34px rgba(0,0,0,.22); pointer-events: auto; font: 11px 'Trebuchet MS', sans-serif; }
+    #doorPrompt.visible { display: flex; }
+    #doorPrompt button { display: none; }
+    #doorText::after { content: '  [E]'; color: var(--accent); font-weight: 700; letter-spacing: .12em; }
+    #merchantPrompt { position: absolute; left: 50%; bottom: 88px; transform: translateX(-50%); display: none; align-items: center; padding: 10px 15px; border: 1px solid rgba(235,245,235,.3); background: var(--panel); box-shadow: 0 12px 34px rgba(0,0,0,.22); font: 11px 'Trebuchet MS', sans-serif; }
+    #merchantPrompt.visible { display: flex; }
+    #merchantText::after { content: '  [E]'; color: var(--accent); font-weight: 700; letter-spacing: .12em; }
+    #merchant { position: absolute; left: 50%; top: 50%; width: min(520px, calc(100vw - 36px)); transform: translate(-50%, -50%) translateY(10px); padding: 22px; border: 1px solid rgba(235,245,235,.28); background: rgba(7, 24, 26, .94); box-shadow: 0 25px 90px rgba(0,0,0,.42); pointer-events: auto; opacity: 0; visibility: hidden; transition: opacity .2s, transform .2s, visibility .2s; font: 12px/1.4 'Trebuchet MS', sans-serif; }
+    #merchant.visible { opacity: 1; visibility: visible; transform: translate(-50%, -50%); }
+    .merchant-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; border-bottom: 1px solid var(--line); padding-bottom: 15px; }
+    .merchant-head small { display: block; color: var(--accent); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; }
+    .merchant-head h2 { margin: 5px 0 0; font: 400 27px Georgia, serif; }
+    .merchant-close { padding: 3px 7px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+    .merchant-close:hover { color: var(--ink); border-color: var(--accent); }
+    #merchantStatus { margin: 14px 0; color: var(--muted); }
+    #merchantStatus b { color: var(--accent); font-weight: 600; }
+    .merchant-tabs { display: flex; gap: 7px; margin-bottom: 12px; }
+    .merchant-tab { flex: 1; padding: 9px 6px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--muted); cursor: pointer; font: 700 10px 'Trebuchet MS', sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+    .merchant-tab.active, .merchant-tab:hover { border-color: var(--accent); background: rgba(243,189,98,.12); color: var(--ink); }
+    .merchant-list { display: grid; gap: 8px; }
+    .merchant-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border: 1px solid rgba(216,239,225,.16); background: rgba(255,255,255,.035); }
+    .merchant-row strong { display: block; color: var(--ink); }
+    .merchant-row span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .merchant-row button { flex: 0 0 auto; min-width: 82px; padding: 8px 9px; border: 1px solid var(--accent); background: rgba(243,189,98,.14); color: var(--accent); cursor: pointer; font: 700 10px 'Trebuchet MS', sans-serif; text-transform: uppercase; }
+    .merchant-row button:hover { background: var(--accent); color: #162b25; }
+    .merchant-row button:disabled { opacity: .35; cursor: not-allowed; }
+    #win { position: absolute; inset: 0; display: none; place-items: center; background: linear-gradient(135deg, rgba(9, 31, 33, .82), rgba(20, 52, 45, .36)); pointer-events: auto; }
+    #win.visible { display: grid; }
+    @media (max-width: 600px) { .brand { top: 19px; left: 20px; } .info, .objective { right: 20px; width: 150px; font-size: 10px; } .info { top: 19px; } .objective { top: 104px; } .bottom { bottom: 18px; left: 20px; } .hint { font-size: 10px; } #message { bottom: 100px; min-width: 220px; } }
+  </style>
+</head>
+<body>
+  <canvas id="fallback" aria-hidden="true"></canvas>
+  <div id="scene"></div>
+  <div class="hud">
+    <div class="brand"><small>Field Notes · 07</small><h1>Northstar Valley</h1></div>
+    <div id="crosshair" aria-hidden="true"></div>
+    <div id="inventory"><strong>Satchel · I</strong><div class="inventory-grid"><div id="axeSlot" class="inventory-item selected"><b>1</b><div class="axe-icon" aria-hidden="true"></div><small>Axe</small></div><div class="inventory-item slot-empty"><small>Empty</small></div><div class="inventory-item slot-empty"><small>Empty</small></div></div><div id="axeStatus" style="margin-top:9px;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase">Equipped · F to swing</div></div>
+    <div class="info"><strong>Exploration map</strong>Follow the old trail through the pines. The lake marks the eastern edge of the valley.</div>
+    <div class="objective"><strong>Current objective</strong><b id="objectiveText">Find the three trail beacons.</b><br><span id="progress">0 / 3 discovered</span></div>
+    <div class="bottom"><div class="compass"><b>N</b></div><div class="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk &nbsp; <kbd>shift</kbd> run &nbsp; <kbd>space</kbd> jump &nbsp; <kbd>ctrl</kbd> crouch<br><span><kbd>I</kbd> inventory · <kbd>F</kbd> swing axe · <kbd>drag</kbd> look</span></div></div>
+    <div id="message"></div>
+    <div id="doorPrompt"><span id="doorText">Shop door nearby</span><button id="doorButton" tabindex="-1">Enter shop</button></div>
+    <div id="merchantPrompt"><span id="merchantText">Talk to Rowan</span></div>
+    <div id="merchant"><div class="merchant-head"><div><small>Northstar Exchange</small><h2>Rowan, shopkeeper</h2></div><button id="merchantClose" class="merchant-close" title="Close shop">X</button></div><div id="merchantStatus"></div><div class="merchant-tabs"><button class="merchant-tab active" data-tab="buy">Buy</button><button class="merchant-tab" data-tab="sell">Sell</button><button class="merchant-tab" data-tab="trade">Trade</button></div><div id="merchantList" class="merchant-list"></div></div>
+    <div id="start"><div class="start-card"><div class="eyebrow">A quiet place to get lost</div><h2 id="startTitle">Northstar Valley</h2><p id="startCopy">Find the three beacons hidden along the old trail, then make your way to the lake.</p><div class="start-actions"><button id="continueButton">Continue</button><button id="newGameButton" class="secondary">New game</button></div><div id="saveStatus">No saved expedition</div></div></div>
+    <div id="win"><div class="start-card"><div class="eyebrow">Field note completed</div><h2>Northstar found</h2><p>You followed every signal through the valley and reached the water. The rest of the path is yours.</p><button id="restartButton">Walk it again</button></div></div>
+  </div>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js';
+    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.161/examples/jsm/controls/PointerLockControls.js';
+
+    const scene = new THREE.Scene();
+    scene.background = null;
+    scene.fog = new THREE.FogExp2(0x91b6ad, 0.0018);
+    const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 700);
+    camera.position.set(0, 2.3, 38);
+    camera.lookAt(0, 0, -20);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+    renderer.setClearColor(0x91b6ad, 0);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    document.querySelector('#scene').appendChild(renderer.domElement);
+
+    const fallback = document.querySelector('#fallback');
+    const fallbackContext = fallback.getContext('2d');
+    function drawFallback() {
+      const width = innerWidth;
+      const height = innerHeight;
+      fallback.width = width * devicePixelRatio;
+      fallback.height = height * devicePixelRatio;
+      fallbackContext.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      const sky = fallbackContext.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, '#6d9faa'); sky.addColorStop(.55, '#a9c4bb'); sky.addColorStop(1, '#d8d3b1');
+      fallbackContext.fillStyle = sky; fallbackContext.fillRect(0, 0, width, height);
+      fallbackContext.globalAlpha = .18;
+      fallbackContext.fillStyle = '#f4f0d9';
+      [[.18,.22,.22],[.7,.28,.28],[.46,.48,.18]].forEach(([x, y, size]) => {
+        fallbackContext.beginPath();
+        fallbackContext.ellipse(width * x, height * y, width * size, height * .035, 0, 0, Math.PI * 2);
+        fallbackContext.ellipse(width * (x + size * .55), height * (y + .01), width * size * .7, height * .026, 0, 0, Math.PI * 2);
+        fallbackContext.fill();
+      });
+      fallbackContext.globalAlpha = 1;
+    }
+    drawFallback();
+
+    scene.add(new THREE.HemisphereLight(0xcfe8df, 0x38534b, 2.1));
+    const sun = new THREE.DirectionalLight(0xffe0ad, 3.0);
+    sun.position.set(-80, 110, 45); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -130; sun.shadow.camera.right = 130; sun.shadow.camera.top = 130; sun.shadow.camera.bottom = -130;
+    scene.add(sun);
+
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x557d62, roughness: .96, metalness: 0 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1040, 1040, 1, 1), groundMat);
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+    function addMesh(geometry, material, position, scale = 1) {
+      const mesh = new THREE.Mesh(geometry, material); mesh.position.copy(position); mesh.scale.setScalar(scale); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); return mesh;
+    }
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x563d2b, roughness: .95 });
+    const pineMat = new THREE.MeshStandardMaterial({ color: 0x204e42, roughness: .95 });
+    const pineLightMat = new THREE.MeshStandardMaterial({ color: 0x35705a, roughness: .95 });
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x687a73, roughness: 1 });
+    const treeColliders = [];
+
+    function pine(x, z, size = 1) {
+      const trunk = addMesh(new THREE.CylinderGeometry(.18 * size, .29 * size, 3.2 * size, 7), trunkMat, new THREE.Vector3(x, 1.6 * size, z));
+      const lowerBoughs = addMesh(new THREE.ConeGeometry(1.45 * size, 3.2 * size, 8), pineMat, new THREE.Vector3(x, 3.45 * size, z));
+      const middleBoughs = addMesh(new THREE.ConeGeometry(1.08 * size, 2.5 * size, 8), pineLightMat, new THREE.Vector3(x, 4.8 * size, z));
+      const topBoughs = addMesh(new THREE.ConeGeometry(.63 * size, 1.8 * size, 8), pineMat, new THREE.Vector3(x, 5.9 * size, z));
+      treeColliders.push({ x, z, radius: .3 * size, meshes: [trunk, lowerBoughs, middleBoughs, topBoughs], hits: 0, chopped: false });
+    }
+    [[-24,-36,1.5],[-39,-22,1.1],[28,-29,1.4],[42,-8,1.2],[-43,8,1.7],[50,20,1.4],[-45,36,1.35],[38,42,1.7],[-65,45,1.1],[-62,-9,1.3],[63,-33,1.2],[17,52,1.3],[-10,-70,1.6],[82,7,1.3],[-105,18,1.5],[108,38,1.2],[-112,-52,1.7],[104,-72,1.4],[-88,-112,1.25],[76,-116,1.55],[12,-123,1.2],[-18,92,1.4],[58,96,1.65],[-118,88,1.15],[116,-12,1.3],[-185,42,1.6],[190,8,1.35],[-210,-50,1.25],[212,-82,1.7],[-170,-165,1.4],[-42,-205,1.55],[58,-218,1.25],[175,-190,1.6],[-245,112,1.2],[238,126,1.5],[-260,-8,1.3],[258,-138,1.4]].forEach(p => pine(...p));
+    const forestClusters = [[-92, -22], [92, -38], [-138, -118], [132, -142], [-78, -214], [86, -236], [-224, 46], [224, 76], [-238, -170], [230, -206], [-188, -8], [176, -12], [-18, -250], [28, -278], [-275, 168], [272, 184], [-154, 210], [164, 232]];
+    forestClusters.forEach(([centerX, centerZ], clusterIndex) => {
+      for (let i = 0; i < 34; i++) {
+        const angle = i * 2.399 + clusterIndex * .73;
+        const radius = 13 + (i % 9) * 4.5;
+        const x = centerX + Math.cos(angle) * radius;
+        const z = centerZ + Math.sin(angle) * radius;
+        if (Math.abs(x) < 17 && z > -230 && z < 55) continue;
+        if (Math.hypot(x - 70, z + 2) < 43) continue;
+        pine(x, z, .82 + (i % 5) * .15);
+      }
+    });
+
+    // Low ridge in the distance and scattered stones make the space readable.
+    const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x47705e, roughness: 1 });
+    addMesh(new THREE.ConeGeometry(42, 26, 7), ridgeMat, new THREE.Vector3(-175, 13, -90));
+    addMesh(new THREE.ConeGeometry(48, 30, 7), ridgeMat, new THREE.Vector3(182, 15, -126));
+    const mountainColliders = [
+      { x: -175, z: -90, radius: 36 },
+      { x: 182, z: -126, radius: 42 }
+    ];
+    for (let i = 0; i < 62; i++) {
+      const x = (Math.sin(i * 9.2) * 108) + (i % 3) * 5;
+      const z = (Math.cos(i * 4.6) * 118);
+      if (Math.abs(x) < 12 && z > -20 && z < 30) continue;
+      const stone = addMesh(new THREE.DodecahedronGeometry(.45 + (i % 4) * .2, 0), rockMat, new THREE.Vector3(x, .3, z));
+      stone.rotation.set(i, i * .6, i * .2); stone.scale.y = .55;
+    }
+
+    const pathMat = new THREE.MeshStandardMaterial({ color: 0xa99068, roughness: 1, metalness: 0 });
+    const trail = new THREE.Mesh(new THREE.PlaneGeometry(7, 300), pathMat);
+    trail.rotation.x = -Math.PI / 2; trail.position.set(0, .012, -108); trail.rotation.z = -.08; scene.add(trail);
+
+    function branchTrail(points, width = 3.4) {
+      const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, .035, z)));
+      const branch = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, width * .5, 6, false), pathMat);
+      branch.scale.y = .035; branch.receiveShadow = true; scene.add(branch); return branch;
+    }
+    branchTrail([[0, -8],[-24, -2],[-48, 16],[-82, 31]], 4.2);
+    branchTrail([[0, -30],[22, -22],[48, -9],[75, 8]], 3.8);
+    branchTrail([[0, -53],[26, -64],[54, -82],[92, -92]], 3.2);
+    branchTrail([[0, -70],[-24, -86],[-52, -102],[-92, -108]], 3.5);
+    branchTrail([[0, -112],[42, -136],[96, -160],[154, -174]], 3.8);
+    branchTrail([[0, -150],[-48, -174],[-112, -190],[-178, -214]], 4.1);
+    branchTrail([[0, -198],[52, -224],[126, -246],[214, -252]], 3.5);
+
+    const shopWallMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4b, roughness: .88 });
+    const shopTrimMat = new THREE.MeshStandardMaterial({ color: 0x3f3027, roughness: .8 });
+    const shopRoofMat = new THREE.MeshStandardMaterial({ color: 0x394d49, roughness: .96 });
+    const shopGlassMat = new THREE.MeshStandardMaterial({ color: 0x8db6b1, roughness: .2, metalness: .1 });
+    const shop = new THREE.Group();
+    shop.position.set(-26, 0, -18); scene.add(shop);
+    const shopBody = new THREE.Mesh(new THREE.BoxGeometry(13, 6.5, 9), shopWallMat);
+    shopBody.position.y = 3.25; shopBody.castShadow = true; shopBody.receiveShadow = true; shop.add(shopBody);
+    const shopRoof = new THREE.Mesh(new THREE.ConeGeometry(9.4, 3.2, 4), shopRoofMat);
+    shopRoof.position.y = 8.1; shopRoof.rotation.y = Math.PI / 4; shopRoof.castShadow = true; shop.add(shopRoof);
+    const shopDoor = new THREE.Mesh(new THREE.BoxGeometry(1.9, 3.7, .12), shopTrimMat);
+    shopDoor.position.set(0, 1.85, 4.56); shop.add(shopDoor);
+    [[-4, 3.1], [4, 3.1]].forEach(([x, y]) => {
+      const window = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.8, .14), shopGlassMat);
+      window.position.set(x, y, 4.57); shop.add(window);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(3.1, 2.2, .1), shopTrimMat);
+      frame.position.set(x, y, 4.5); shop.add(frame);
+    });
+    const porch = new THREE.Mesh(new THREE.BoxGeometry(10, .3, 3), shopTrimMat);
+    porch.position.set(0, .15, 5.4); porch.castShadow = true; shop.add(porch);
+    const signCanvas = document.createElement('canvas');
+    signCanvas.width = 512; signCanvas.height = 180;
+    const signContext = signCanvas.getContext('2d');
+    signContext.fillStyle = '#d09b55'; signContext.fillRect(0, 0, signCanvas.width, signCanvas.height);
+    signContext.strokeStyle = '#3f3027'; signContext.lineWidth = 14; signContext.strokeRect(8, 8, signCanvas.width - 16, signCanvas.height - 16);
+    signContext.fillStyle = '#263b35'; signContext.font = '700 88px Georgia'; signContext.textAlign = 'center'; signContext.textBaseline = 'middle'; signContext.fillText('SHOP', 256, 92);
+    const signTexture = new THREE.CanvasTexture(signCanvas); signTexture.colorSpace = THREE.SRGBColorSpace;
+    const shopSign = new THREE.Mesh(new THREE.PlaneGeometry(6.2, 2.2), new THREE.MeshBasicMaterial({ map: signTexture }));
+    shopSign.position.set(0, 6.55, 6.8); shop.add(shopSign);
+    const signPost = new THREE.Mesh(new THREE.CylinderGeometry(.1, .1, 1.2, 8), shopTrimMat);
+    signPost.position.set(0, 5.1, 6.76); shop.add(signPost);
+    const shopCollision = { minX: -32.5, maxX: -19.5, minZ: -22.5, maxZ: -13.5 };
+    const shopInterior = new THREE.Group(); shopInterior.visible = false; scene.add(shopInterior);
+    const interiorFloor = new THREE.Mesh(new THREE.BoxGeometry(12.5, .2, 8.5), new THREE.MeshStandardMaterial({ color: 0x6d5039, roughness: .95 }));
+    interiorFloor.position.set(-26, .1, -18); shopInterior.add(interiorFloor);
+    const interiorWallMat = new THREE.MeshStandardMaterial({ color: 0x76583f, roughness: .92, side: THREE.DoubleSide });
+    const interiorBackWall = new THREE.Mesh(new THREE.BoxGeometry(12.5, 7, .25), interiorWallMat);
+    interiorBackWall.position.set(-26, 3.5, -22.25); shopInterior.add(interiorBackWall);
+    const interiorLeftWall = new THREE.Mesh(new THREE.BoxGeometry(.25, 7, 8.5), interiorWallMat);
+    interiorLeftWall.position.set(-32.25, 3.5, -18); shopInterior.add(interiorLeftWall);
+    const interiorRightWall = interiorLeftWall.clone();
+    interiorRightWall.position.x = -19.75; shopInterior.add(interiorRightWall);
+    const interiorFrontWall = new THREE.Mesh(new THREE.BoxGeometry(4.85, 7, .25), interiorWallMat);
+    interiorFrontWall.position.set(-29.825, 3.5, -13.75); shopInterior.add(interiorFrontWall);
+    const interiorFrontWallRight = interiorFrontWall.clone();
+    interiorFrontWallRight.position.x = -22.175; shopInterior.add(interiorFrontWallRight);
+    const interiorLintel = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.3, .25), interiorWallMat);
+    interiorLintel.position.set(-26, 5.35, -13.75); shopInterior.add(interiorLintel);
+    const interiorCeiling = new THREE.Mesh(new THREE.BoxGeometry(12.5, .25, 8.5), interiorWallMat);
+    interiorCeiling.position.set(-26, 7, -18); shopInterior.add(interiorCeiling);
+    const merchant = new THREE.Group(); merchant.position.set(-26, 0, -21.25); shopInterior.add(merchant);
+    const merchantBodyMat = new THREE.MeshStandardMaterial({ color: 0x315d58, roughness: .88 });
+    const merchantApronMat = new THREE.MeshStandardMaterial({ color: 0xc18a52, roughness: .9 });
+    const merchantSkinMat = new THREE.MeshStandardMaterial({ color: 0xc88962, roughness: .92 });
+    const merchantHairMat = new THREE.MeshStandardMaterial({ color: 0x3b2c28, roughness: .95 });
+    const merchantBody = new THREE.Mesh(new THREE.CylinderGeometry(.55, .7, 1.65, 10), merchantBodyMat);
+    merchantBody.position.y = 1.35; merchant.add(merchantBody);
+    const merchantApron = new THREE.Mesh(new THREE.BoxGeometry(.78, 1.05, .08), merchantApronMat);
+    merchantApron.position.set(0, 1.35, -.55); merchant.add(merchantApron);
+    const merchantHead = new THREE.Mesh(new THREE.SphereGeometry(.48, 12, 8), merchantSkinMat);
+    merchantHead.position.y = 2.55; merchant.add(merchantHead);
+    const merchantHair = new THREE.Mesh(new THREE.SphereGeometry(.5, 12, 8, 0, Math.PI * 2, 0, Math.PI * .55), merchantHairMat);
+    merchantHair.position.set(0, 2.7, -.02); merchant.add(merchantHair);
+    const merchantHat = new THREE.Mesh(new THREE.CylinderGeometry(.7, .62, .16, 10), merchantHairMat);
+    merchantHat.position.y = 3.05; merchant.add(merchantHat);
+    merchant.traverse(mesh => { if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; } });
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(6, 1.3, 1.3), shopTrimMat);
+    counter.position.set(-26, .65, -20.2); shopInterior.add(counter);
+    for (let i = 0; i < 3; i++) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.8, .5), shopWallMat);
+      shelf.position.set(-30 + i * 3.8, 1.4, -14.6); shopInterior.add(shelf);
+    }
+    let insideShop = false;
+
+    const clearingMat = new THREE.MeshStandardMaterial({ color: 0x77996b, roughness: 1 });
+    [[-62, 35, 13], [54, 47, 16], [-75, -78, 11]].forEach(([x, z, radius]) => {
+      const clearing = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), clearingMat);
+      clearing.rotation.x = -Math.PI / 2; clearing.position.set(x, .02, z); clearing.receiveShadow = true; scene.add(clearing);
+    });
+
+    const landmarkMat = new THREE.MeshStandardMaterial({ color: 0x72665b, roughness: .85 });
+    const arch = new THREE.Group(); arch.position.set(-58, 0, 30); scene.add(arch);
+    addMesh(new THREE.CylinderGeometry(.35, .5, 5.5, 8), landmarkMat, new THREE.Vector3(-60, 2.75, 30));
+    addMesh(new THREE.CylinderGeometry(.35, .5, 5.5, 8), landmarkMat, new THREE.Vector3(-56, 2.75, 30));
+    addMesh(new THREE.CylinderGeometry(.4, .55, 4.8, 8), landmarkMat, new THREE.Vector3(-58, 5.25, 30), 1).rotation.z = Math.PI / 2;
+
+    const water = new THREE.Mesh(new THREE.CircleGeometry(34, 64), new THREE.MeshStandardMaterial({ color: 0x397984, roughness: .22, metalness: .08, transparent: true, opacity: .9 }));
+    water.rotation.x = -Math.PI / 2; water.position.set(70, .07, -2); scene.add(water);
+    const shore = new THREE.Mesh(new THREE.RingGeometry(33.5, 35.4, 64), new THREE.MeshStandardMaterial({ color: 0xc3b27c, roughness: 1 }));
+    shore.rotation.x = -Math.PI / 2; shore.position.set(70, .055, -2); scene.add(shore);
+
+    const starMat = new THREE.MeshBasicMaterial({ color: 0xffe7ad });
+    const beaconPositions = [[8, -23], [-7, -52], [18, -78]];
+    const beacons = beaconPositions.map(([x, z]) => {
+      addMesh(new THREE.CylinderGeometry(.06, .06, 3.4, 8), new THREE.MeshStandardMaterial({ color: 0x493a2a }), new THREE.Vector3(x, 1.7, z));
+      const light = addMesh(new THREE.SphereGeometry(.3, 12, 8), starMat, new THREE.Vector3(x, 3.5, z));
+      return { x, z, light, found: false };
+    });
+
+    const axe = new THREE.Group();
+    const axeHandle = new THREE.Mesh(new THREE.CylinderGeometry(.045, .065, 1.15, 8), new THREE.MeshStandardMaterial({ color: 0x744a2d, roughness: .9 }));
+    const axeHead = new THREE.Mesh(new THREE.BoxGeometry(.3, .32, .14), new THREE.MeshStandardMaterial({ color: 0x9ca7a3, metalness: .65, roughness: .3 }));
+    axeHandle.rotation.z = -.22; axeHandle.position.set(.04, -.55, 0); axeHead.position.set(-.19, -.05, 0); axeHead.rotation.z = -.22;
+    axe.add(axeHandle, axeHead); axe.position.set(.72, -.48, -1.05); axe.rotation.set(-.18, -.25, -.28); axe.visible = true; camera.add(axe); scene.add(camera);
+    let axeSwing = 0;
+    let axeSwinging = false;
+
+    const deerBodyMat = new THREE.MeshStandardMaterial({ color: 0x8a5d3c, roughness: .9 });
+    const deerDarkMat = new THREE.MeshStandardMaterial({ color: 0x4b3022, roughness: .95 });
+    const antlerMat = new THREE.MeshStandardMaterial({ color: 0xc7a87b, roughness: .9 });
+    function deerPart(group, geometry, material, position, scale) {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...position);
+      if (scale) mesh.scale.set(...scale);
+      mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+      return mesh;
+    }
+    function createDeer(x, z, rotation) {
+      const group = new THREE.Group();
+      group.position.set(x, 0, z); group.rotation.y = rotation; scene.add(group);
+      deerPart(group, new THREE.SphereGeometry(.7, 12, 8), deerBodyMat, [0, 1.25, 0], [1.45, .75, .7]);
+      deerPart(group, new THREE.CylinderGeometry(.18, .24, .8, 8), deerBodyMat, [0, 1.75, -.43], [.9, 1, .9]);
+      deerPart(group, new THREE.SphereGeometry(.38, 12, 8), deerBodyMat, [0, 2.12, -.78], [1, .9, 1.15]);
+      deerPart(group, new THREE.SphereGeometry(.12, 8, 6), deerDarkMat, [0, 2.1, -1.12]);
+      const legs = [];
+      [[-.43, .75, -.22], [.43, .75, -.22], [-.43, .75, .22], [.43, .75, .22]].forEach(position => {
+        legs.push(deerPart(group, new THREE.CylinderGeometry(.075, .1, .85, 7), deerDarkMat, position));
+      });
+      [[-.23, 2.42, -.78], [.23, 2.42, -.78]].forEach(position => deerPart(group, new THREE.ConeGeometry(.12, .36, 5), deerBodyMat, position, [1, 1, .65]));
+      [[-.18, 2.48, -.78], [.18, 2.48, -.78]].forEach(position => deerPart(group, new THREE.CylinderGeometry(.035, .05, .55, 6), antlerMat, position, [1, 1, 1]));
+      return { group, legs, homeX: x, homeZ: z, velocity: new THREE.Vector2(), phase: Math.random() * Math.PI * 2, alert: false };
+    }
+    const deerActors = [
+      createDeer(-18, -34, .4),
+      createDeer(26, -48, -1.1),
+      createDeer(-28, -70, .8)
+    ];
+
+    const controls = new PointerLockControls(camera, document.body);
+    camera.rotation.order = 'YXZ';
+    let yaw = 0;
+    let pitch = -0.04;
+    let dragging = false;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    const start = document.querySelector('#start');
+    const win = document.querySelector('#win');
+    const message = document.querySelector('#message');
+    const objectiveText = document.querySelector('#objectiveText');
+    const progress = document.querySelector('#progress');
+    const continueButton = document.querySelector('#continueButton');
+    const newGameButton = document.querySelector('#newGameButton');
+    const saveStatus = document.querySelector('#saveStatus');
+    const doorPrompt = document.querySelector('#doorPrompt');
+    const doorText = document.querySelector('#doorText');
+    const doorButton = document.querySelector('#doorButton');
+    const inventory = document.querySelector('#inventory');
+    const axeStatus = document.querySelector('#axeStatus');
+    const axeSlot = document.querySelector('#axeSlot');
+    const merchantPanel = document.querySelector('#merchant');
+    const merchantPrompt = document.querySelector('#merchantPrompt');
+    const merchantList = document.querySelector('#merchantList');
+    const merchantStatus = document.querySelector('#merchantStatus');
+    let gameWon = false;
+    let gameStarted = false;
+    let messageTimer;
+    let axeEquipped = true;
+    let merchantOpen = false;
+    let merchantTab = 'buy';
+    let coins = 24;
+    let wood = 0;
+    let berries = 3;
+    let seedPackets = 0;
+    let lanterns = 0;
+    const saveKey = 'northstar-valley-save-v1';
+    let lastSaveTime = 0;
+    function showMessage(text) {
+      message.textContent = text; message.classList.add('visible');
+      clearTimeout(messageTimer); messageTimer = setTimeout(() => message.classList.remove('visible'), 3200);
+    }
+    function updateStartMenu() {
+      const hasSave = Boolean(localStorage.getItem(saveKey));
+      continueButton.disabled = !hasSave;
+      continueButton.style.opacity = hasSave ? '1' : '.4';
+      saveStatus.textContent = hasSave ? 'Saved expedition available' : 'No saved expedition';
+    }
+    function saveGame() {
+      if (!gameStarted || insideShop) return;
+      const state = {
+        position: camera.position.toArray(), yaw, pitch,
+        beacons: beacons.map(beacon => beacon.found),
+        trees: treeColliders.map(tree => ({ hits: tree.hits, chopped: tree.chopped })),
+        coins, wood, berries, seedPackets, lanterns,
+        gameWon
+      };
+      localStorage.setItem(saveKey, JSON.stringify(state));
+      saveStatus.textContent = 'Expedition saved';
+      lastSaveTime = performance.now();
+    }
+    function loadGame() {
+      const raw = localStorage.getItem(saveKey);
+      if (!raw) return false;
+      try {
+        const state = JSON.parse(raw);
+        camera.position.fromArray(state.position || [0, 2.3, 38]);
+        yaw = state.yaw || 0; pitch = state.pitch || -.04; camera.rotation.set(pitch, yaw, 0);
+        beacons.forEach((beacon, index) => { beacon.found = Boolean(state.beacons?.[index]); beacon.light.visible = !beacon.found; });
+        treeColliders.forEach((tree, index) => { const saved = state.trees?.[index]; tree.hits = saved?.hits || 0; tree.chopped = Boolean(saved?.chopped); tree.meshes.forEach(mesh => { mesh.visible = !tree.chopped; }); });
+        coins = Number.isFinite(state.coins) ? state.coins : 24;
+        wood = Number.isFinite(state.wood) ? state.wood : 0;
+        berries = Number.isFinite(state.berries) ? state.berries : 3;
+        seedPackets = Number.isFinite(state.seedPackets) ? state.seedPackets : 0;
+        lanterns = Number.isFinite(state.lanterns) ? state.lanterns : 0;
+        gameWon = Boolean(state.gameWon); progress.textContent = `${beacons.filter(beacon => beacon.found).length} / 3 discovered`;
+        objectiveText.textContent = beacons.every(beacon => beacon.found) ? 'Reach the lake to complete the field note.' : 'Find the three trail beacons.';
+        return true;
+      } catch (error) { localStorage.removeItem(saveKey); return false; }
+    }
+    function swingAxe() {
+      if (!gameStarted || !axeEquipped || axeSwinging) return;
+      axeSwinging = true; axeSwing = 0;
+      camera.getWorldDirection(forwardVector); forwardVector.y = 0; forwardVector.normalize();
+      const nearbyTree = treeColliders
+        .filter(tree => !tree.chopped)
+        .map(tree => {
+          const offsetX = tree.x - camera.position.x;
+          const offsetZ = tree.z - camera.position.z;
+          const distance = Math.hypot(offsetX, offsetZ);
+          return { tree, distance, facing: distance ? (offsetX * forwardVector.x + offsetZ * forwardVector.z) / distance : 1 };
+        })
+        .filter(candidate => candidate.distance < 4.2 && candidate.facing > .15)
+        .sort((first, second) => first.distance - second.distance)[0]?.tree;
+      if (nearbyTree) {
+        nearbyTree.hits += 1;
+        if (nearbyTree.hits >= 3) {
+          nearbyTree.chopped = true;
+          wood += 1;
+          nearbyTree.meshes.forEach(mesh => { mesh.visible = false; });
+          showMessage(`Tree chopped down. Wood collected: ${wood}.`);
+        } else {
+          showMessage(`Chop ${nearbyTree.hits} / 3. The bark splinters.`);
+        }
+      } else {
+        showMessage('You swing the axe through the quiet air.');
+      }
+    }
+    function resetGame() {
+      beacons.forEach(beacon => { beacon.found = false; beacon.light.visible = true; });
+      treeColliders.forEach(tree => { tree.hits = 0; tree.chopped = false; tree.meshes.forEach(mesh => { mesh.visible = true; }); });
+      deerActors.forEach(deer => { deer.group.position.set(deer.homeX, 0, deer.homeZ); deer.velocity.set(0, 0); deer.alert = false; });
+      camera.position.set(0, 2.3, 38); yaw = 0; pitch = -0.04; camera.rotation.set(pitch, yaw, 0); movementVelocity.set(0, 0); verticalVelocity = 0; grounded = true; bobTime = 0; gameWon = false; gameStarted = false;
+      axeEquipped = true; axe.visible = true; axeSlot.classList.add('selected'); axeStatus.textContent = 'Equipped · F to swing'; inventory.classList.remove('visible'); axe.rotation.set(-.18, -.25, -.28); axeSwinging = false;
+      merchantOpen = false; merchantPanel.classList.remove('visible'); merchantPrompt.classList.remove('visible'); merchantTab = 'buy'; coins = 24; wood = 0; berries = 3; seedPackets = 0; lanterns = 0;
+      insideShop = false; shop.visible = true; shopInterior.visible = false; doorPrompt.classList.remove('visible');
+      objectiveText.textContent = 'Find the three trail beacons.';
+      progress.textContent = '0 / 3 discovered';
+      win.classList.remove('visible'); start.style.display = 'grid'; updateStartMenu();
+    }
+    function enterShop() {
+      if (insideShop) { insideShop = false; shopInterior.visible = false; shop.visible = true; camera.position.set(-26, 2.3, -10.5); showMessage('You step back outside.'); saveGame(); }
+      else { insideShop = true; shop.visible = false; shopInterior.visible = true; camera.position.set(-26, 2.3, -18); showMessage('Welcome to the shop.'); }
+      doorPrompt.classList.remove('visible'); merchantPrompt.classList.remove('visible');
+    }
+    function renderMerchant() {
+      merchantStatus.innerHTML = `Coins: <b>${coins}</b> &nbsp; Wood: <b>${wood}</b> &nbsp; Berries: <b>${berries}</b> &nbsp; Seeds: <b>${seedPackets}</b> &nbsp; Lanterns: <b>${lanterns}</b>`;
+      const rows = {
+        buy: [
+          { name: 'Lantern', detail: 'A warm light for the long trail.', label: '12 coins', action: 'buy-lantern', disabled: coins < 12 },
+          { name: 'Seed packet', detail: 'A small promise for a future garden.', label: '6 coins', action: 'buy-seeds', disabled: coins < 6 }
+        ],
+        sell: [
+          { name: 'Bundle of wood', detail: 'Useful timber from a felled pine.', label: '+3 coins', action: 'sell-wood', disabled: wood < 1 },
+          { name: 'Wild berries', detail: 'Sweet, bright, and easy to carry.', label: '+2 coins', action: 'sell-berries', disabled: berries < 1 }
+        ],
+        trade: [
+          { name: 'Wood for lantern', detail: 'Trade 3 wood for 1 lantern.', label: 'Trade', action: 'trade-lantern', disabled: wood < 3 },
+          { name: 'Berries for seeds', detail: 'Trade 2 berries for 1 seed packet.', label: 'Trade', action: 'trade-seeds', disabled: berries < 2 }
+        ]
+      }[merchantTab];
+      merchantList.innerHTML = rows.map(row => `<div class="merchant-row"><div><strong>${row.name}</strong><span>${row.detail}</span></div><button data-merchant-action="${row.action}" ${row.disabled ? 'disabled' : ''}>${row.label}</button></div>`).join('');
+      document.querySelectorAll('.merchant-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === merchantTab));
+    }
+    function openMerchant() {
+      if (!insideShop || merchantOpen) return;
+      merchantOpen = true; movementVelocity.set(0, 0); merchantTab = 'buy'; renderMerchant(); merchantPanel.classList.add('visible'); merchantPrompt.classList.remove('visible'); doorPrompt.classList.remove('visible'); controls.unlock();
+    }
+    function closeMerchant() {
+      if (!merchantOpen) return;
+      merchantOpen = false; merchantPanel.classList.remove('visible');
+      movementVelocity.set(0, 0);
+      if (gameStarted && !gameWon) controls.lock();
+    }
+    function merchantAction(action) {
+      const actions = {
+        'buy-lantern': () => { if (coins < 12) return false; coins -= 12; lanterns += 1; return true; },
+        'buy-seeds': () => { if (coins < 6) return false; coins -= 6; seedPackets += 1; return true; },
+        'sell-wood': () => { if (wood < 1) return false; wood -= 1; coins += 3; return true; },
+        'sell-berries': () => { if (berries < 1) return false; berries -= 1; coins += 2; return true; },
+        'trade-lantern': () => { if (wood < 3) return false; wood -= 3; lanterns += 1; return true; },
+        'trade-seeds': () => { if (berries < 2) return false; berries -= 2; seedPackets += 1; return true; }
+      }[action];
+      if (!actions || !actions()) { showMessage('Rowan shakes his head. You need more supplies.'); return; }
+      renderMerchant(); showMessage('Trade complete. Rowan tucks it away.');
+    }
+    function resumeGame(loadSaved) {
+      if (loadSaved && !loadGame()) return;
+      gameStarted = true; start.style.display = 'none'; doorPrompt.classList.remove('visible'); controls.lock();
+    }
+    continueButton.addEventListener('click', () => resumeGame(true));
+    newGameButton.addEventListener('click', () => { resetGame(); resumeGame(false); saveGame(); });
+    document.querySelector('#restartButton').addEventListener('click', () => { resetGame(); gameStarted = true; start.style.display = 'none'; controls.lock(); });
+    doorButton.addEventListener('click', enterShop);
+    document.querySelector('#merchantClose').addEventListener('click', closeMerchant);
+    document.querySelectorAll('.merchant-tab').forEach(tab => tab.addEventListener('click', () => { merchantTab = tab.dataset.tab; renderMerchant(); }));
+    merchantList.addEventListener('click', event => { const button = event.target.closest('[data-merchant-action]'); if (button) merchantAction(button.dataset.merchantAction); });
+    controls.addEventListener('lock', () => { start.style.display = 'none'; });
+    controls.addEventListener('unlock', () => {
+      if (!gameWon && gameStarted && !merchantOpen) { saveGame(); updateStartMenu(); start.style.display = 'grid'; }
+    });
+    updateStartMenu();
+    addEventListener('keydown', event => {
+      if (event.code === 'KeyI') inventory.classList.toggle('visible');
+      if (event.code === 'Digit1') { axeEquipped = !axeEquipped; axe.visible = axeEquipped; axeSlot.classList.toggle('selected', axeEquipped); axeStatus.textContent = axeEquipped ? 'Equipped · F to swing' : 'Stored · press 1 to equip'; }
+      if (event.code === 'KeyF') swingAxe();
+      if (event.code === 'Escape' && merchantOpen) { event.preventDefault(); closeMerchant(); }
+      if (event.code === 'KeyE' && gameStarted && insideShop && !merchantOpen && Math.hypot(camera.position.x + 26, camera.position.z + 21.25) < 4.5) { event.preventDefault(); openMerchant(); }
+      if (event.code === 'KeyE' && gameStarted && doorPrompt.classList.contains('visible')) { event.preventDefault(); enterShop(); }
+    });
+
+    renderer.domElement.addEventListener('pointerdown', event => {
+      if (!gameStarted) return;
+      if (event.button === 0) swingAxe();
+      if (controls.isLocked) return;
+      dragging = true; lastPointerX = event.clientX; lastPointerY = event.clientY; renderer.domElement.setPointerCapture(event.pointerId);
+    });
+    renderer.domElement.addEventListener('pointermove', event => {
+      if (!dragging || controls.isLocked) return;
+      yaw -= (event.clientX - lastPointerX) * 0.004;
+      pitch = THREE.MathUtils.clamp(pitch - (event.clientY - lastPointerY) * 0.004, -1.25, 1.25);
+      camera.rotation.set(pitch, yaw, 0);
+      lastPointerX = event.clientX; lastPointerY = event.clientY;
+    });
+    renderer.domElement.addEventListener('pointerup', event => { dragging = false; renderer.domElement.releasePointerCapture(event.pointerId); });
+    renderer.domElement.addEventListener('pointercancel', () => { dragging = false; });
+
+    const keys = {};
+    addEventListener('keydown', e => { keys[e.code] = true; if (['Space', 'ControlLeft', 'ControlRight'].includes(e.code)) e.preventDefault(); });
+    addEventListener('keyup', e => keys[e.code] = false);
+    const clock = new THREE.Clock();
+    const movementVelocity = new THREE.Vector2();
+    const forwardVector = new THREE.Vector3();
+    const rightVector = new THREE.Vector3();
+    const movementVector = new THREE.Vector3();
+    let verticalVelocity = 0;
+    let grounded = true;
+    let bobTime = 0;
+    function resolveWorldCollisions() {
+      const playerRadius = 1.05;
+      [...treeColliders, ...mountainColliders].forEach(obstacle => {
+        if (obstacle.chopped) return;
+        const minimumDistance = obstacle.radius + playerRadius;
+        const offsetX = camera.position.x - obstacle.x;
+        const offsetZ = camera.position.z - obstacle.z;
+        const distance = Math.hypot(offsetX, offsetZ);
+        if (distance > 0 && distance < minimumDistance) {
+          const push = (minimumDistance - distance) / distance;
+          camera.position.x += offsetX * push;
+          camera.position.z += offsetZ * push;
+        }
+      });
+    }
+    function resolveShopCollision() {
+      const radius = 1.05;
+      if (insideShop) {
+        camera.position.x = THREE.MathUtils.clamp(camera.position.x, -31.2 + radius, -20.8 - radius);
+        camera.position.z = THREE.MathUtils.clamp(camera.position.z, -21.2 + radius, -14.8 - radius);
+        return;
+      }
+      const doorHalfWidth = 1.45;
+      const nearDoor = Math.abs(camera.position.x - (-26)) < doorHalfWidth;
+      if (camera.position.x > shopCollision.minX - radius && camera.position.x < shopCollision.maxX + radius && camera.position.z > shopCollision.minZ - radius && camera.position.z < shopCollision.maxZ + radius) {
+        const pushLeft = Math.abs(camera.position.x - (shopCollision.minX - radius));
+        const pushRight = Math.abs((shopCollision.maxX + radius) - camera.position.x);
+        const pushBack = Math.abs(camera.position.z - (shopCollision.minZ - radius));
+        const pushFront = Math.abs((shopCollision.maxZ + radius) - camera.position.z);
+        if (nearDoor && camera.position.z > shopCollision.maxZ - radius) camera.position.z = shopCollision.maxZ + radius;
+        else {
+          const smallest = Math.min(pushLeft, pushRight, pushBack, pushFront);
+          if (smallest === pushLeft) camera.position.x = shopCollision.minX - radius;
+          else if (smallest === pushRight) camera.position.x = shopCollision.maxX + radius;
+          else if (smallest === pushBack) camera.position.z = shopCollision.minZ - radius;
+          else camera.position.z = shopCollision.maxZ + radius;
+        }
+      }
+    }
+    function updateDeer(delta) {
+      deerActors.forEach(deer => {
+        const awayX = deer.group.position.x - camera.position.x;
+        const awayZ = deer.group.position.z - camera.position.z;
+        const distance = Math.hypot(awayX, awayZ);
+        const fleeing = distance < 14;
+        if (fleeing) {
+          const safeDistance = Math.max(distance, .001);
+          const fleeSpeed = distance < 7 ? 23 : 17;
+          deer.velocity.lerp(new THREE.Vector2(awayX / safeDistance, awayZ / safeDistance).multiplyScalar(fleeSpeed), 1 - Math.exp(-7 * delta));
+          if (!deer.alert) showMessage('A deer bounds away through the trees.');
+          deer.alert = true;
+        } else {
+          deer.velocity.lerp(new THREE.Vector2(), 1 - Math.exp(-2.5 * delta));
+          deer.alert = false;
+        }
+        if (deer.velocity.lengthSq() > .02) {
+          deer.group.position.x += deer.velocity.x * delta;
+          deer.group.position.z += deer.velocity.y * delta;
+          const targetRotation = Math.atan2(deer.velocity.x, -deer.velocity.y);
+          let rotationDelta = targetRotation - deer.group.rotation.y;
+          rotationDelta = Math.atan2(Math.sin(rotationDelta), Math.cos(rotationDelta));
+          deer.group.rotation.y += rotationDelta * Math.min(delta * 8, 1);
+          deer.phase += delta * 18;
+          deer.legs.forEach((leg, index) => { leg.rotation.x = Math.sin(deer.phase + index * Math.PI) * .42; });
+        }
+        deer.group.position.x = THREE.MathUtils.clamp(deer.group.position.x, -290, 290);
+        deer.group.position.z = THREE.MathUtils.clamp(deer.group.position.z, -290, 290);
+      });
+    }
+    function move(delta) {
+      if (!gameStarted || merchantOpen) return;
+      const input = new THREE.Vector2(
+        Number(Boolean(keys.KeyD)) - Number(Boolean(keys.KeyA)),
+        Number(Boolean(keys.KeyW)) - Number(Boolean(keys.KeyS))
+      );
+      if (input.lengthSq() > 1) input.normalize();
+      const sprinting = Boolean(keys.ShiftLeft || keys.ShiftRight);
+      const maxSpeed = sprinting ? 25 : 16;
+      const acceleration = input.lengthSq() ? 11 : 15;
+      movementVelocity.lerp(input.multiplyScalar(maxSpeed), 1 - Math.exp(-acceleration * delta));
+      const distance = delta;
+      camera.getWorldDirection(forwardVector);
+      forwardVector.y = 0;
+      forwardVector.normalize();
+      rightVector.crossVectors(forwardVector, camera.up).normalize();
+      movementVector.copy(forwardVector).multiplyScalar(movementVelocity.y).addScaledVector(rightVector, movementVelocity.x);
+      camera.position.addScaledVector(movementVector, distance);
+      resolveWorldCollisions();
+      resolveShopCollision();
+      const speedRatio = Math.min(movementVelocity.length() / 16, 1.5);
+      if (movementVelocity.lengthSq() > .01) bobTime += delta * (sprinting ? 13 : 9);
+      const bobAmount = movementVelocity.lengthSq() > .01 ? Math.sin(bobTime) * .045 * speedRatio : 0;
+      const crouching = Boolean(keys.ControlLeft || keys.ControlRight);
+      if (keys.Space && grounded && !crouching) { verticalVelocity = 20; grounded = false; keys.Space = false; }
+      verticalVelocity -= 22 * delta;
+      const targetHeight = crouching && grounded ? 1.25 : 2.3;
+      camera.position.y += verticalVelocity * delta;
+      if (camera.position.y <= targetHeight) { camera.position.y = targetHeight; verticalVelocity = 0; grounded = true; }
+      camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight + bobAmount, 1 - Math.exp(-12 * delta));
+      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -290, 290);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -290, 290);
+      updateDeer(delta);
+      const doorDistance = Math.hypot(camera.position.x + 26, camera.position.z - (-13.5));
+      if (insideShop) {
+        doorText.textContent = 'Leave the shop'; doorButton.textContent = 'Exit'; doorPrompt.classList.toggle('visible', Math.hypot(camera.position.x + 26, camera.position.z + 13.5) < 4.5);
+        merchantPrompt.classList.toggle('visible', Math.hypot(camera.position.x + 26, camera.position.z + 21.25) < 4.5);
+      } else {
+        doorText.textContent = 'Shop door nearby'; doorButton.textContent = 'Enter shop'; doorPrompt.classList.toggle('visible', doorDistance < 5);
+        merchantPrompt.classList.remove('visible');
+      }
+      if (performance.now() - lastSaveTime > 3500) saveGame();
+      if (axeSwinging) {
+        axeSwing = Math.min(axeSwing + delta / .58, 1);
+        const progress = axeSwing;
+        const windup = Math.min(progress / .42, 1);
+        const strike = THREE.MathUtils.smoothstep(progress, .42, .62);
+        const followThrough = THREE.MathUtils.smoothstep(progress, .62, 1);
+        axe.rotation.z = THREE.MathUtils.lerp(-.28, 1.05, windup) - strike * 2.35 + followThrough * .55;
+        axe.rotation.x = THREE.MathUtils.lerp(-.18, -.95, windup) + strike * 1.15 - followThrough * .25;
+        axe.rotation.y = THREE.MathUtils.lerp(-.25, .12, windup) - strike * .18;
+        axe.position.y = THREE.MathUtils.lerp(-.48, -.18, windup) - strike * .12 + followThrough * .08;
+        if (progress >= 1) { axeSwinging = false; axe.position.set(.72, -.48, -1.05); axe.rotation.set(-.18, -.25, -.28); }
+      }
+      const discovered = beacons.filter(beacon => !beacon.found && Math.hypot(camera.position.x - beacon.x, camera.position.z - beacon.z) < 3.5);
+      discovered.forEach(beacon => { beacon.found = true; beacon.light.visible = false; });
+      if (discovered.length) {
+        const count = beacons.filter(beacon => beacon.found).length;
+        progress.textContent = `${count} / 3 discovered`;
+        showMessage(count === 3 ? 'All beacons found. Follow the trail to the lake.' : 'Beacon recorded. Keep following the trail.');
+        if (count === 3) objectiveText.textContent = 'Reach the lake to complete the field note.';
+      }
+      if (!gameWon && beacons.every(beacon => beacon.found) && Math.hypot(camera.position.x - 70, camera.position.z + 2) < 30) {
+        gameWon = true; controls.unlock(); win.classList.add('visible'); objectiveText.textContent = 'Field note complete.'; progress.textContent = '3 / 3 discovered';
+      }
+    }
+    function animate() { move(Math.min(clock.getDelta(), .05)); renderer.render(scene, camera); requestAnimationFrame(animate); }
+    addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); drawFallback(); });
+    animate();
+  </script>
+</body>
+</html>
