@@ -4,3 +4,4 @@
 <img width="1398" height="793" alt="Screenshot 2026-08-20 005120" src="https://github.com/user-attachments/assets/c55d1897-1354-4c19-a34f-434982d07330" />
 # Northstar-valley-alpha-v0.0.0.1-patch-1
 a very early alpha of my game
+just download the html file 
